@@ -27,7 +27,7 @@ func mkcid(t *testing.T, cidStr string) cid.Cid {
 
 func validate(t *testing.T, actual ipld.Node, expected pbNode) {
 	mi := actual.MapIterator()
-	_, isTyped := actual.(*_PBNode)
+	_, isTyped := Unwrap(actual).(*PBNode)
 
 	hasLinks := false
 	hasData := false
