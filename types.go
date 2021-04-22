@@ -1,19 +1,15 @@
 package dagpb
 
 import (
-	"reflect"
-
 	ipld "github.com/ipld/go-ipld-prime"
 )
 
-var Type struct {
+var Type = struct {
 	PBNode ipld.NodePrototype
 	PBLink ipld.NodePrototype
-}
-
-func init() {
-	Type.PBNode = _prototype{reflect.TypeOf(PBNode{})}
-	Type.PBLink = _prototype{reflect.TypeOf(PBLink{})}
+}{
+	PBNode: Prototype((*PBNode)(nil)),
+	PBLink: Prototype((*PBLink)(nil)),
 }
 
 type PBNode struct {

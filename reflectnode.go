@@ -8,29 +8,12 @@ import (
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 )
 
-var (
-	typeString = reflect.TypeOf("")
-	typeBytes  = reflect.TypeOf([]byte{})
-	typeLink   = reflect.TypeOf((*ipld.Link)(nil)).Elem()
-)
-
 func Wrap(ptr interface{}) ipld.Node {
 	ptrVal := reflect.ValueOf(ptr)
 	if ptrVal.Kind() != reflect.Ptr {
 		panic("must be a pointer")
 	}
-	return wrap(ptrVal.Elem())
-}
-
-func wrap(val reflect.Value) ipld.Node {
-	if !val.CanAddr() {
-		panic("must be addressable")
-	}
-	return &_node{val}
-}
-
-type _node struct {
-	val reflect.Value
+	return &_node{ptrVal.Elem()}
 }
 
 func Unwrap(node ipld.Node) (ptr interface{}) {
@@ -41,6 +24,24 @@ func Unwrap(node ipld.Node) (ptr interface{}) {
 		return w.val.Addr().Interface()
 	}
 	return nil
+}
+
+func Prototype(typ interface{}) ipld.NodePrototype {
+	rtyp := reflect.TypeOf(typ)
+	if rtyp.Kind() != reflect.Ptr {
+		panic("must be a pointer")
+	}
+	return &_prototype{rtyp.Elem()}
+}
+
+var (
+	typeString = reflect.TypeOf("")
+	typeBytes  = reflect.TypeOf([]byte{})
+	typeLink   = reflect.TypeOf((*ipld.Link)(nil)).Elem()
+)
+
+type _node struct {
+	val reflect.Value // non-pointer
 }
 
 func (w *_node) under() reflect.Value {
@@ -262,7 +263,7 @@ func (w *_node) Prototype() ipld.NodePrototype {
 }
 
 type _prototype struct {
-	typ reflect.Type
+	typ reflect.Type // non-pointer
 }
 
 func (w _prototype) NewBuilder() ipld.NodeBuilder {
@@ -282,7 +283,7 @@ func (w *_builder) Reset() {
 }
 
 type _assembler struct {
-	val reflect.Value
+	val reflect.Value // non-pointer
 }
 
 func (w *_assembler) BeginMap(sizeHint int64) (ipld.MapAssembler, error) {
@@ -464,7 +465,7 @@ func (w *_assembler) AssignNode(node ipld.Node) error {
 	case ipld.Kind_Null:
 		return w.AssignNull()
 	}
-	fmt.Println(w.val.Type(), reflect.TypeOf(node))
+	// fmt.Println(w.val.Type(), reflect.TypeOf(node))
 	panic(fmt.Sprintf("TODO: %v %v", w.val.Type(), node.Kind()))
 }
 
@@ -473,7 +474,7 @@ func (w *_assembler) Prototype() ipld.NodePrototype {
 }
 
 type _structAssembler struct {
-	val reflect.Value
+	val reflect.Value // non-pointer
 
 	// TODO: more state checks
 	doneFields []bool
@@ -529,7 +530,7 @@ func (w *_structAssembler) ValuePrototype(k string) ipld.NodePrototype {
 }
 
 type _listAssembler struct {
-	val reflect.Value
+	val reflect.Value // non-pointer
 }
 
 func (w *_listAssembler) AssembleValue() ipld.NodeAssembler {
@@ -552,7 +553,7 @@ func (w *_listAssembler) ValuePrototype(idx int64) ipld.NodePrototype {
 
 type _structIterator struct {
 	// TODO: support embedded fields?
-	val       reflect.Value
+	val       reflect.Value // non-pointer
 	nextIndex int
 }
 
@@ -568,7 +569,7 @@ func (w *_structIterator) Done() bool {
 }
 
 type _listIterator struct {
-	val       reflect.Value
+	val       reflect.Value // non-pointer
 	nextIndex int
 }
 
