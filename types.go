@@ -18,7 +18,7 @@ func init() {
 
 type PBNode struct {
 	Links []PBLink
-	Data  []byte // optional
+	Data  *[]byte // optional
 }
 
 type PBLink struct {
