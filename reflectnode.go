@@ -6,9 +6,13 @@ import (
 
 	ipld "github.com/ipld/go-ipld-prime"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
+	"github.com/ipld/go-ipld-prime/schema"
 )
 
-func Wrap(ptr interface{}) ipld.Node {
+// WrapNoSchema implements an ipld.Node given a pointer to a Go value.
+//
+// Same rules as PrototypeNoSchema apply.
+func WrapNoSchema(ptr interface{}) ipld.Node {
 	ptrVal := reflect.ValueOf(ptr)
 	if ptrVal.Kind() != reflect.Ptr {
 		panic("must be a pointer")
@@ -16,6 +20,10 @@ func Wrap(ptr interface{}) ipld.Node {
 	return &_node{ptrVal.Elem()}
 }
 
+// Unwrap takes an ipld.Node implemented by one of the Wrap* APIs, and returns
+// a pointer to the inner Go value.
+//
+// Unwrap returns nil if the node isn't implemented by this package.
 func Unwrap(node ipld.Node) (ptr interface{}) {
 	if w, ok := node.(*_node); ok {
 		if w.val.Kind() == reflect.Ptr {
@@ -26,12 +34,39 @@ func Unwrap(node ipld.Node) (ptr interface{}) {
 	return nil
 }
 
-func Prototype(typ interface{}) ipld.NodePrototype {
-	rtyp := reflect.TypeOf(typ)
-	if rtyp.Kind() != reflect.Ptr {
+// PrototypeNoSchema implements an ipld.NodePrototype given a Go pointer type.
+//
+// In this form, no IPLD schema is used; it is entirely inferred from the Go
+// type.
+//
+// Go types map to schema types in simple ways: Go string to schema String, Go
+// []byte to schema Bytes, Go struct to schema Map, and so on.
+//
+// A Go struct field is optional when its type is a pointer. Nullable fields are
+// not supported in this mode.
+func PrototypeNoSchema(ptrType interface{}) ipld.NodePrototype {
+	typ := reflect.TypeOf(ptrType)
+	if typ.Kind() != reflect.Ptr {
 		panic("must be a pointer")
 	}
-	return &_prototype{rtyp.Elem()}
+	return &_prototype{typ.Elem()}
+}
+
+// PrototypeOnlySchema implements an ipld.NodePrototype given an IPLD schema type.
+//
+// In this form, Go values are constructed with types inferred from the IPLD
+// schema, like a reverse of PrototypeNoSchema.
+func PrototypeOnlySchema(schemaType schema.Type) ipld.NodePrototype {
+	panic("TODO")
+}
+
+// Prototype implements an ipld.NodePrototype given a Go pointer type and an
+// IPLD schema type.
+//
+// In this form, it is assumed that the Go type and IPLD schema type are
+// compatible. TODO: check upfront and panic otherwise
+func Prototype(ptrType interface{}, schemaType schema.Type) ipld.NodePrototype {
+	panic("TODO")
 }
 
 var (
@@ -583,3 +618,13 @@ func (w *_listIterator) Next() (index int64, value ipld.Node, _ error) {
 func (w *_listIterator) Done() bool {
 	return w.nextIndex >= w.val.Len()
 }
+
+// TODO: consider making our own Node interface, like:
+//
+// type WrappedNode interface {
+//     ipld.Node
+//     Unwrap() (ptr interface)
+// }
+//
+// Pros: API is easier to understand, harder to mix up with other ipld.Nodes.
+// Cons: One usually only has an ipld.Node, and type assertions can be weird.

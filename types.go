@@ -8,8 +8,8 @@ var Type = struct {
 	PBNode ipld.NodePrototype
 	PBLink ipld.NodePrototype
 }{
-	PBNode: Prototype((*PBNode)(nil)),
-	PBLink: Prototype((*PBLink)(nil)),
+	PBNode: PrototypeNoSchema((*PBNode)(nil)),
+	PBLink: PrototypeNoSchema((*PBLink)(nil)),
 }
 
 type PBNode struct {
