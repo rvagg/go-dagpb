@@ -15,7 +15,6 @@ import (
 var benchInput []byte
 
 func init() {
-	return // TODO
 	someData := bytes.Repeat([]byte("some plaintext data\n"), 10)
 	someCid, _ := cid.Cast([]byte{1, 85, 0, 5, 0, 1, 2, 3, 4})
 

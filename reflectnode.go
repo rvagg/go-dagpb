@@ -303,7 +303,7 @@ func (w *_node) AsLink() (ipld.Link, error) {
 }
 
 func (w *_node) Prototype() ipld.NodePrototype {
-	panic("TODO: ")
+	panic("TODO: Prototype")
 }
 
 type _builder struct {
@@ -315,7 +315,7 @@ func (w *_builder) Build() ipld.Node {
 }
 
 func (w *_builder) Reset() {
-	panic("TODO")
+	panic("TODO: Reset")
 }
 
 type _assembler struct {
@@ -365,7 +365,7 @@ func (w *_assembler) AssignNull() error {
 }
 
 func (w *_assembler) AssignBool(bool) error {
-	panic("TODO")
+	panic("TODO: AssignBool")
 }
 
 func (w *_assembler) AssignInt(i int64) error {
@@ -387,7 +387,7 @@ func (w *_assembler) AssignInt(i int64) error {
 }
 
 func (w *_assembler) AssignFloat(float64) error {
-	panic("TODO")
+	panic("TODO: AssignFloat")
 }
 
 func (w *_assembler) AssignString(s string) error {
@@ -516,7 +516,7 @@ func (w *_assembler) AssignNode(node ipld.Node) error {
 }
 
 func (w *_assembler) Prototype() ipld.NodePrototype {
-	panic("TODO")
+	panic("TODO: Assembler.Prototype")
 }
 
 type _structAssembler struct {
@@ -562,7 +562,10 @@ func (w *_structAssembler) AssembleValue() ipld.NodeAssembler {
 }
 
 func (w *_structAssembler) AssembleEntry(k string) (ipld.NodeAssembler, error) {
-	panic("TODO")
+	w.AssembleKey().AssignString(k)
+	am := w.AssembleValue()
+	// TODO: when should this return an error?
+	return am, nil
 }
 
 func (w *_structAssembler) Finish() error {
@@ -581,7 +584,7 @@ func (w *_structAssembler) KeyPrototype() ipld.NodePrototype {
 }
 
 func (w *_structAssembler) ValuePrototype(k string) ipld.NodePrototype {
-	panic("TODO")
+	panic("TODO: struct ValuePrototype")
 }
 
 type _listAssembler struct {
@@ -601,7 +604,7 @@ func (w *_listAssembler) Finish() error {
 }
 
 func (w *_listAssembler) ValuePrototype(idx int64) ipld.NodePrototype {
-	panic("TODO")
+	panic("TODO: list ValuePrototype")
 }
 
 type _structIterator struct {
