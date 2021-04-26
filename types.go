@@ -2,6 +2,7 @@ package dagpb
 
 import (
 	ipld "github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/fluent/mirror"
 	"github.com/ipld/go-ipld-prime/schema"
 )
 
@@ -72,8 +73,6 @@ func init() {
 	// 	os.Exit(1)
 	// }
 
-	Type.PBNode = Prototype((*PBNode)(nil), ts.TypeByName("PBNode"))
-	Type.PBLink = Prototype((*PBLink)(nil), ts.TypeByName("PBLink"))
-
-	schemaTypeString = ts.TypeByName("String")
+	Type.PBNode = mirror.Prototype((*PBNode)(nil), ts.TypeByName("PBNode"))
+	Type.PBLink = mirror.Prototype((*PBLink)(nil), ts.TypeByName("PBLink"))
 }

@@ -7,3 +7,5 @@ require (
 	github.com/ipld/go-ipld-prime v0.9.1-0.20210419122646-246262ea66a4
 	google.golang.org/protobuf v1.26.0
 )
+
+replace github.com/ipld/go-ipld-prime => ../../src/ipld

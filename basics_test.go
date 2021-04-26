@@ -8,6 +8,7 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/fluent"
+	"github.com/ipld/go-ipld-prime/fluent/mirror"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 )
@@ -27,7 +28,7 @@ func mkcid(t *testing.T, cidStr string) cid.Cid {
 
 func validate(t *testing.T, actual ipld.Node, expected pbNode) {
 	mi := actual.MapIterator()
-	_, isTyped := Unwrap(actual).(*PBNode)
+	_, isTyped := mirror.Unwrap(actual).(*PBNode)
 
 	hasLinks := false
 	hasData := false
