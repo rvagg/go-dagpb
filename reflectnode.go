@@ -13,11 +13,12 @@ import (
 //
 // Same rules as PrototypeNoSchema apply.
 func WrapNoSchema(ptr interface{}) ipld.Node {
-	ptrVal := reflect.ValueOf(ptr)
-	if ptrVal.Kind() != reflect.Ptr {
-		panic("must be a pointer")
-	}
-	return &_node{val: ptrVal.Elem()}
+	panic("TODO")
+	// ptrVal := reflect.ValueOf(ptr)
+	// if ptrVal.Kind() != reflect.Ptr {
+	// 	panic("must be a pointer")
+	// }
+	// return &_node{val: ptrVal.Elem()}
 }
 
 // Unwrap takes an ipld.Node implemented by one of the Wrap* APIs, and returns
@@ -93,65 +94,54 @@ var (
 	goTypeString = reflect.TypeOf("")
 	goTypeBytes  = reflect.TypeOf([]byte{})
 	goTypeLink   = reflect.TypeOf((*ipld.Link)(nil)).Elem()
+
+	schemaTypeString schema.Type
 )
 
 type _node struct {
 	schemaType schema.Type
 
+	optional, nullable bool
+
 	val reflect.Value // non-pointer
 }
 
 func (w *_node) Kind() ipld.Kind {
-	typ := w.val.Type()
-	if typ.Kind() == reflect.Ptr {
-		typ = typ.Elem()
-		if w.val.IsNil() {
-			return ipld.Kind_Null
-		}
+	// TODO: avoid this check usually?
+	if w.IsAbsent() {
+		return ipld.Kind_Null
 	}
-
-	switch typ.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return ipld.Kind_Int
-
-	case reflect.Float32, reflect.Float64:
-		return ipld.Kind_Float
-
-	case reflect.String:
-		return ipld.Kind_String
-
-	case reflect.Struct, reflect.Map:
-		return ipld.Kind_Map
-
-	case reflect.Slice, reflect.Array:
-		if typ.Elem().Kind() == reflect.Uint8 {
-			return ipld.Kind_Bytes
-		}
-		return ipld.Kind_List
-
-	case reflect.Interface:
-		if typ == goTypeLink {
-			return ipld.Kind_Link
-		}
-	}
-	return ipld.Kind_Invalid
+	return w.schemaType.TypeKind().ActsLike()
 }
 
 func (w *_node) LookupByString(key string) (ipld.Node, error) {
-	switch w.val.Kind() {
-	case reflect.Struct:
-		fval := w.val.FieldByName(key)
-		if !fval.IsValid() {
+	switch typ := w.schemaType.(type) {
+	case *schema.TypeStruct:
+		field := typ.Field(key)
+		if field == nil {
 			return nil, &ipld.ErrInvalidKey{
-				TypeName: w.val.Type().Name(),
+				TypeName: typ.Name().String(),
 				Key:      basicnode.NewString(key),
 			}
 		}
-		return &_node{val: fval}, nil
-	case reflect.Map:
+		fval := w.val.FieldByName(key)
+		if !fval.IsValid() {
+			panic("TODO: go-schema mismatch")
+		}
+		node := &_node{
+			schemaType: field.Type(),
+			optional:   field.IsOptional(),
+			nullable:   field.IsNullable(),
+			val:        fval,
+		}
+		if node.optional && node.nullable {
+			panic("TODO: optional and nullable")
+		}
+		return node, nil
+	case *schema.TypeMap:
 	}
 	return nil, &ipld.ErrWrongKind{
+		TypeName:   w.schemaType.Name().String(),
 		MethodName: "LookupByString",
 		// TODO
 	}
@@ -162,13 +152,14 @@ func (w *_node) LookupByNode(key ipld.Node) (ipld.Node, error) {
 }
 
 func (w *_node) LookupByIndex(idx int64) (ipld.Node, error) {
-	switch w.val.Kind() {
-	case reflect.Slice, reflect.Array:
+	switch typ := w.schemaType.(type) {
+	case *schema.TypeList:
 		// TODO: bounds check
 		val := w.val.Index(int(idx))
-		return &_node{val: val}, nil
+		return &_node{schemaType: typ.ValueType(), val: val}, nil
 	}
 	return nil, &ipld.ErrWrongKind{
+		TypeName:   w.schemaType.Name().String(),
 		MethodName: "LookupByIndex",
 		// TODO
 	}
@@ -179,10 +170,13 @@ func (w *_node) LookupBySegment(seg ipld.PathSegment) (ipld.Node, error) {
 }
 
 func (w *_node) MapIterator() ipld.MapIterator {
-	switch w.val.Kind() {
-	case reflect.Struct:
-		return &_structIterator{schemaType: w.schemaType, val: w.val}
-	case reflect.Map:
+	switch typ := w.schemaType.(type) {
+	case *schema.TypeStruct:
+		return &_structIterator{
+			fields: typ.Fields(),
+			val:    w.val,
+		}
+	case *schema.TypeMap:
 		panic("TODO: ")
 	}
 	return nil
@@ -197,16 +191,16 @@ func (w *_node) ListIterator() ipld.ListIterator {
 			val = val.Elem()
 		}
 	}
-	switch val.Kind() {
-	case reflect.Slice:
-		return &_listIterator{val: val}
+	switch typ := w.schemaType.(type) {
+	case *schema.TypeList:
+		return &_listIterator{schemaType: typ, val: val}
 	}
 	return nil
 }
 
 func (w *_node) Length() int64 {
-	switch w.val.Kind() {
-	case reflect.Slice, reflect.Array, reflect.Map:
+	switch w.Kind() {
+	case ipld.Kind_List, ipld.Kind_Map:
 		return int64(w.val.Len())
 	}
 	return -1
@@ -215,15 +209,11 @@ func (w *_node) Length() int64 {
 // TODO: better story around pointers and absent/null
 
 func (w *_node) IsAbsent() bool {
-	switch w.val.Kind() {
-	case reflect.Ptr:
-		return w.val.IsNil()
-	}
-	return false
+	return w.optional && w.val.IsNil()
 }
 
 func (w *_node) IsNull() bool {
-	return false // TODO
+	return w.nullable && w.val.IsNil()
 }
 
 func (w *_node) AsBool() (bool, error) {
@@ -235,12 +225,14 @@ func (w *_node) AsInt() (int64, error) {
 	typ := val.Type()
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
-		if !val.IsNil() {
-			val = val.Elem()
+		if val.IsNil() {
+			panic("Kind == Int but nil ptr?")
 		}
+		val = val.Elem()
 	}
 	if typ.Kind() != reflect.Int {
 		return 0, &ipld.ErrWrongKind{
+			TypeName:   w.schemaType.Name().String(),
 			MethodName: "AsInt",
 			// TODO
 		}
@@ -263,6 +255,7 @@ func (w *_node) AsString() (string, error) {
 	}
 	if typ.Kind() != reflect.String {
 		return "", &ipld.ErrWrongKind{
+			TypeName:   w.schemaType.Name().String(),
 			MethodName: "AsString",
 			// TODO
 		}
@@ -281,6 +274,7 @@ func (w *_node) AsBytes() ([]byte, error) {
 	}
 	if typ.Kind() != reflect.Slice || typ.Elem().Kind() != reflect.Uint8 {
 		return nil, &ipld.ErrWrongKind{
+			TypeName:   w.schemaType.Name().String(),
 			MethodName: "AsBytes",
 			// TODO
 		}
@@ -299,6 +293,7 @@ func (w *_node) AsLink() (ipld.Link, error) {
 	}
 	if typ != goTypeLink {
 		return nil, &ipld.ErrWrongKind{
+			TypeName:   w.schemaType.Name().String(),
 			MethodName: "AsLink",
 			// TODO
 		}
@@ -316,7 +311,7 @@ type _builder struct {
 }
 
 func (w *_builder) Build() ipld.Node {
-	return &_node{val: w.val}
+	return &_node{schemaType: w.schemaType, val: w.val}
 }
 
 func (w *_builder) Reset() {
@@ -329,17 +324,18 @@ type _assembler struct {
 }
 
 func (w *_assembler) BeginMap(sizeHint int64) (ipld.MapAssembler, error) {
-	switch w.val.Kind() {
-	case reflect.Struct:
+	switch typ := w.schemaType.(type) {
+	case *schema.TypeStruct:
 		doneFields := make([]bool, w.val.NumField())
 		return &_structAssembler{
-			schemaType: w.schemaType,
+			schemaType: typ,
 			val:        w.val,
 			doneFields: doneFields,
 		}, nil
-	case reflect.Map:
+	case *schema.TypeMap:
 	}
 	return nil, &ipld.ErrWrongKind{
+		TypeName:   w.schemaType.Name().String(),
 		MethodName: "BeginMap",
 		// TODO
 	}
@@ -353,11 +349,12 @@ func (w *_assembler) BeginList(sizeHint int64) (ipld.ListAssembler, error) {
 		val.Set(reflect.New(typ.Elem()))
 		val = val.Elem()
 	}
-	switch val.Kind() {
-	case reflect.Slice:
-		return &_listAssembler{schemaType: w.schemaType, val: val}, nil
+	switch typ := w.schemaType.(type) {
+	case *schema.TypeList:
+		return &_listAssembler{schemaType: typ, val: val}, nil
 	}
 	return nil, &ipld.ErrWrongKind{
+		TypeName:   w.schemaType.Name().String(),
 		MethodName: "BeginList",
 		// TODO
 	}
@@ -380,6 +377,7 @@ func (w *_assembler) AssignInt(i int64) error {
 	}
 	if typ.Kind() != reflect.Int {
 		return &ipld.ErrWrongKind{
+			TypeName:   w.schemaType.Name().String(),
 			MethodName: "AssignInt",
 			// TODO
 		}
@@ -401,6 +399,7 @@ func (w *_assembler) AssignString(s string) error {
 	}
 	if typ.Kind() != reflect.String {
 		return &ipld.ErrWrongKind{
+			TypeName:   w.schemaType.Name().String(),
 			MethodName: "AssignString",
 			// TODO
 		}
@@ -419,6 +418,7 @@ func (w *_assembler) AssignBytes(p []byte) error {
 	}
 	if typ.Kind() == reflect.Slice && typ.Elem().Kind() == reflect.Uint8 {
 		return &ipld.ErrWrongKind{
+			TypeName:   w.schemaType.Name().String(),
 			MethodName: "AssignBytes",
 			// TODO
 		}
@@ -431,6 +431,7 @@ func (w *_assembler) AssignLink(link ipld.Link) error {
 	newVal := reflect.ValueOf(link)
 	if !newVal.Type().AssignableTo(w.val.Type()) {
 		return &ipld.ErrWrongKind{
+			TypeName:   w.schemaType.Name().String(),
 			MethodName: "AssignLink",
 			// TODO
 		}
@@ -521,7 +522,7 @@ func (w *_assembler) Prototype() ipld.NodePrototype {
 type _structAssembler struct {
 	// TODO: embed _assembler?
 
-	schemaType schema.Type
+	schemaType *schema.TypeStruct
 	val        reflect.Value // non-pointer
 
 	// TODO: more state checks
@@ -533,16 +534,23 @@ type _structAssembler struct {
 }
 
 func (w *_structAssembler) AssembleKey() ipld.NodeAssembler {
-	w.curKey = _assembler{val: reflect.New(goTypeString).Elem()}
+	w.curKey = _assembler{
+		schemaType: schemaTypeString,
+		val:        reflect.New(goTypeString).Elem(),
+	}
 	return &w.curKey
-	// case reflect.Map: w.curKey = _assembler{reflect.New(typ.Key()).Elem()}
 }
 
 func (w *_structAssembler) AssembleValue() ipld.NodeAssembler {
+	// TODO: optimize this to do one lookup by name
 	name := w.curKey.val.String()
+	field := w.schemaType.Field(name)
+	if field == nil {
+		panic("TODO: missing fields")
+	}
 	ftyp, ok := w.val.Type().FieldByName(name)
 	if !ok {
-		panic("TODO: missing fields")
+		panic("TODO: go-schema mismatch")
 	}
 	if len(ftyp.Index) > 1 {
 		panic("TODO: embedded fields")
@@ -550,7 +558,7 @@ func (w *_structAssembler) AssembleValue() ipld.NodeAssembler {
 	w.doneFields[ftyp.Index[0]] = true
 	fval := w.val.FieldByIndex(ftyp.Index)
 	// TODO: reuse same assembler for perf?
-	return &_assembler{schemaType: w.schemaType, val: fval}
+	return &_assembler{schemaType: field.Type(), val: fval}
 }
 
 func (w *_structAssembler) AssembleEntry(k string) (ipld.NodeAssembler, error) {
@@ -558,19 +566,18 @@ func (w *_structAssembler) AssembleEntry(k string) (ipld.NodeAssembler, error) {
 }
 
 func (w *_structAssembler) Finish() error {
-	typ := w.val.Type()
-	for i := 0; i < typ.NumField(); i++ {
-		ftyp := typ.Field(i)
-		if ftyp.Type.Kind() != reflect.Ptr && !w.doneFields[i] {
-			return &ipld.ErrMissingRequiredField{Missing: []string{ftyp.Name}}
+	fields := w.schemaType.Fields()
+	for i, field := range fields {
+		if !field.IsOptional() && !w.doneFields[i] {
+			// TODO: return a complete list
+			return &ipld.ErrMissingRequiredField{Missing: []string{field.Name()}}
 		}
 	}
 	return nil
 }
 
 func (w *_structAssembler) KeyPrototype() ipld.NodePrototype {
-	return &_prototype{goType: goTypeString}
-	// reflect.Map: return _prototype{w.val.Type().Key()}
+	return &_prototype{schemaType: schemaTypeString, goType: goTypeString}
 }
 
 func (w *_structAssembler) ValuePrototype(k string) ipld.NodePrototype {
@@ -578,19 +585,15 @@ func (w *_structAssembler) ValuePrototype(k string) ipld.NodePrototype {
 }
 
 type _listAssembler struct {
-	schemaType schema.Type
+	schemaType *schema.TypeList
 
 	val reflect.Value // non-pointer
 }
 
 func (w *_listAssembler) AssembleValue() ipld.NodeAssembler {
-	switch typ := w.val.Type(); typ.Kind() {
-	case reflect.Slice:
-		w.val.Set(reflect.Append(w.val, reflect.New(typ.Elem()).Elem()))
-		return &_assembler{schemaType: w.schemaType, val: w.val.Index(w.val.Len() - 1)}
-	default:
-		panic("unreachable")
-	}
+	goType := w.val.Type().Elem()
+	w.val.Set(reflect.Append(w.val, reflect.New(goType).Elem()))
+	return &_assembler{schemaType: w.schemaType.ValueType(), val: w.val.Index(w.val.Len() - 1)}
 }
 
 func (w *_listAssembler) Finish() error {
@@ -603,32 +606,42 @@ func (w *_listAssembler) ValuePrototype(idx int64) ipld.NodePrototype {
 
 type _structIterator struct {
 	// TODO: support embedded fields?
-	schemaType schema.Type
-	val        reflect.Value // non-pointer
-	nextIndex  int
+	fields    []schema.StructField
+	val       reflect.Value // non-pointer
+	nextIndex int
 }
 
 func (w *_structIterator) Next() (key, value ipld.Node, _ error) {
-	name := w.val.Type().Field(w.nextIndex).Name
+	field := w.fields[w.nextIndex]
 	val := w.val.Field(w.nextIndex)
 	w.nextIndex++
-	return basicnode.NewString(name), &_node{val: val}, nil
+	node := &_node{
+		schemaType: field.Type(),
+		optional:   field.IsOptional(),
+		nullable:   field.IsNullable(),
+		val:        val,
+	}
+	if node.optional && node.nullable {
+		panic("TODO: optional and nullable")
+	}
+	return basicnode.NewString(field.Name()), node, nil
 }
 
 func (w *_structIterator) Done() bool {
-	return w.nextIndex >= w.val.NumField()
+	return w.nextIndex >= len(w.fields)
 }
 
 type _listIterator struct {
-	val       reflect.Value // non-pointer
-	nextIndex int
+	schemaType *schema.TypeList
+	val        reflect.Value // non-pointer
+	nextIndex  int
 }
 
 func (w *_listIterator) Next() (index int64, value ipld.Node, _ error) {
 	idx := int64(w.nextIndex)
 	val := w.val.Index(w.nextIndex)
 	w.nextIndex++
-	return idx, &_node{val: val}, nil
+	return idx, &_node{schemaType: w.schemaType.ValueType(), val: val}, nil
 }
 
 func (w *_listIterator) Done() bool {

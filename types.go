@@ -74,4 +74,6 @@ func init() {
 
 	Type.PBNode = Prototype((*PBNode)(nil), ts.TypeByName("PBNode"))
 	Type.PBLink = Prototype((*PBLink)(nil), ts.TypeByName("PBLink"))
+
+	schemaTypeString = ts.TypeByName("String")
 }
